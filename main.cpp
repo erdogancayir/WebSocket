@@ -2,32 +2,47 @@
 
 int main(int ac, char **av, char **env)
 {
-    int client_sockfd;
-    struct sockaddr_in client_addr;
-    char 		c;
-	std::string res;
+    client a;
     char buff[4096];
-    std::fstream file;
-    socklen_t client_addr_len;
-    file.open("a.html");
+    a.file.open("a.html");
     int sockfd = createSocket();
-	while (!file.eof())
+	while (!a.file.eof())
     {
-        file >> std::noskipws >> c;
-        res += c;
+        a.file >> std::noskipws >> a.c;
+        a.res += a.c;
     }
-    file.close();
+    a.file.close();
+    a.new_sockfd = -1;
     while (1)
     {
-        client_addr_len = sizeof(client_addr);
-        client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
-        client_addr_len = sizeof(client_addr);
-        read(client_sockfd, buff, 4096);
-        std::cout << buff << std::endl;
-        if (client_sockfd < 0) {
-            std::cout << "accept error";
+        FD_ZERO(&a.read_fds);
+        FD_SET(sockfd, &a.read_fds);
+
+        a.timeout.tv_sec = 5;
+        a.timeout.tv_usec = 0;
+
+        int active = select(sockfd + 1, &a.read_fds, NULL, NULL, &a.timeout);
+        read(sockfd, buff, 1000);
+        if (active < 0)
+        {
+            perror("select \n");
             exit(1);
         }
-        write(client_sockfd, res.c_str(), res.length());
+
+        if (FD_ISSET(sockfd, &a.read_fds))
+        {
+            a.len = sizeof(a.client_addr);
+            a.new_sockfd = accept(sockfd, (struct sockaddr *)&a.client_addr, &a.len);
+            if (a.new_sockfd < 0)
+            {
+                perror("accpt error: \n");
+                exit(2);
+            }
+        }
+        if (a.new_sockfd != -1){
+        a.read_bytes = read(a.new_sockfd, buff, sizeof(buff));
+        send(a.new_sockfd, a.res.c_str(), a.res.length(), 0);
+        close(a.new_sockfd);}
     }
+    return (0);
 }
